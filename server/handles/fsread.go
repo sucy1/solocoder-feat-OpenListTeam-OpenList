@@ -100,7 +100,6 @@ func FsList(c *gin.Context, req *ListReq, user *model.User) {
 		return
 	}
 	var objs []model.Obj
-	var err error
 	if req.Q != "" {
 		objs, err = fs.Search(c.Request.Context(), reqPath, req.Q, &fs.SearchArgs{
 			Refresh:            req.Refresh,

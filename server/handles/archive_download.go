@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	stdpath "path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -204,7 +205,7 @@ func streamZipArchive(ctx context.Context, w io.Writer, reqPath string) error {
 			return nil
 		}
 
-		relPath, err := stdpath.Rel(reqPath, path)
+		relPath, err := filepath.Rel(reqPath, path)
 		if err != nil {
 			return err
 		}
@@ -257,7 +258,7 @@ func streamTarGzArchive(ctx context.Context, w io.Writer, reqPath string) error 
 			return nil
 		}
 
-		relPath, err := stdpath.Rel(reqPath, path)
+		relPath, err := filepath.Rel(reqPath, path)
 		if err != nil {
 			return err
 		}
