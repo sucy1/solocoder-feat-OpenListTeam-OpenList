@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/fs"
@@ -26,8 +27,7 @@ import (
 )
 
 const (
-	maxArchiveSize     int64 = 500 * 1024 * 1024
-	archiveTimeout           = 30 * time.Second
+	maxArchiveSize int64 = 500 * 1024 * 1024
 )
 
 type ArchiveDownloadReq struct {
@@ -35,6 +35,13 @@ type ArchiveDownloadReq struct {
 	Password string `json:"password" form:"password"`
 	Format   string `json:"format" form:"format"`
 	Confirm  bool   `json:"confirm" form:"confirm"`
+}
+
+func getArchiveTimeout() time.Duration {
+	if flags.ArchiveTimeout > 0 {
+		return flags.ArchiveTimeout
+	}
+	return 30 * time.Second
 }
 
 func formatFileSize(size int64) string {
@@ -140,7 +147,7 @@ func ArchiveDownload(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), archiveTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), getArchiveTimeout())
 	defer cancel()
 
 	baseName := stdpath.Base(reqPath)

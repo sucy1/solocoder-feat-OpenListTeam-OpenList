@@ -106,15 +106,23 @@ func FsList(c *gin.Context, req *ListReq, user *model.User) {
 			Refresh:            req.Refresh,
 			WithStorageDetails: !user.IsGuest() && !setting.GetBool(conf.HideStorageDetails),
 		})
+		if err != nil {
+			if strings.HasPrefix(req.Q, "/") && strings.HasSuffix(req.Q, "/") {
+				common.ErrorStrResp(c, "invalid regex pattern: "+err.Error(), 400)
+			} else {
+				common.ErrorResp(c, err, 500)
+			}
+			return
+		}
 	} else {
 		objs, err = fs.List(c.Request.Context(), reqPath, &fs.ListArgs{
 			Refresh:            req.Refresh,
 			WithStorageDetails: !user.IsGuest() && !setting.GetBool(conf.HideStorageDetails),
 		})
-	}
-	if err != nil {
-		common.ErrorResp(c, err, 500)
-		return
+		if err != nil {
+			common.ErrorResp(c, err, 500)
+			return
+		}
 	}
 	total, objs := pagination(objs, &req.PageReq)
 	provider := "unknown"

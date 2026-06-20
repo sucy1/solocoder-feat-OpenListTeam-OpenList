@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
 	_ "github.com/OpenListTeam/OpenList/v4/drivers"
@@ -39,4 +40,5 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&flags.UploadDir, "upload-dir", "uploads", "upload directory (default: uploads)")
 	RootCmd.PersistentFlags().Int64Var(&flags.MaxUploadSize, "max-upload-size", 100*1024*1024, "max upload size in bytes (default: 100MB)")
 	RootCmd.PersistentFlags().StringVar(&flags.PasswdFile, "passwd-file", "", "path to htpasswd file for directory protection")
+	RootCmd.PersistentFlags().DurationVar(&flags.ArchiveTimeout, "archive-timeout", 30*time.Second, "archive download timeout (default: 30s)")
 }

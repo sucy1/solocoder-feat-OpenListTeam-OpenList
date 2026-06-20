@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,14 +27,23 @@ func InitSimpleStorage() {
 	storageType := strings.ToLower(flags.StorageType)
 	var storage model.Storage
 	var addition driver.Additional
+	var err error
 
 	switch storageType {
 	case "local":
 		storage, addition = buildLocalStorage()
 	case "s3":
-		storage, addition = buildS3Storage()
+		storage, addition, err = buildS3Storage()
+		if err != nil {
+			log.Errorf("invalid S3 storage config: %+v", err)
+			return
+		}
 	case "webdav":
-		storage, addition = buildWebDAVStorage()
+		storage, addition, err = buildWebDAVStorage()
+		if err != nil {
+			log.Errorf("invalid WebDAV storage config: %+v", err)
+			return
+		}
 	default:
 		log.Warnf("unsupported storage type: %s, skip simple storage init", flags.StorageType)
 		return
@@ -62,6 +72,14 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func requireEnv(key string) (string, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return "", fmt.Errorf("required environment variable %s is not set", key)
+	}
+	return value, nil
 }
 
 func buildLocalStorage() (model.Storage, driver.Additional) {
@@ -94,7 +112,25 @@ func buildLocalStorage() (model.Storage, driver.Additional) {
 	return storage, addition
 }
 
-func buildS3Storage() (model.Storage, driver.Additional) {
+func buildS3Storage() (model.Storage, driver.Additional, error) {
+	accessKeyID, err := requireEnv("S3_ACCESS_KEY_ID")
+	if err != nil {
+		return model.Storage{}, nil, err
+	}
+	secretAccessKey, err := requireEnv("S3_SECRET_ACCESS_KEY")
+	if err != nil {
+		return model.Storage{}, nil, err
+	}
+	region, err := requireEnv("S3_REGION")
+	if err != nil {
+		return model.Storage{}, nil, err
+	}
+	bucket, err := requireEnv("S3_BUCKET")
+	if err != nil {
+		return model.Storage{}, nil, err
+	}
+	endpoint := getEnv("S3_ENDPOINT", "")
+
 	storage := model.Storage{
 		MountPath:       "/",
 		Order:           1,
@@ -107,19 +143,27 @@ func buildS3Storage() (model.Storage, driver.Additional) {
 		RootPath: driver.RootPath{
 			RootFolderPath: "/",
 		},
-		AccessKeyID:       getEnv("S3_ACCESS_KEY_ID", ""),
-		SecretAccessKey:   getEnv("S3_SECRET_ACCESS_KEY", ""),
-		Region:            getEnv("S3_REGION", ""),
-		Bucket:            getEnv("S3_BUCKET", ""),
-		Endpoint:          getEnv("S3_ENDPOINT", ""),
+		AccessKeyID:       accessKeyID,
+		SecretAccessKey:   secretAccessKey,
+		Region:            region,
+		Bucket:            bucket,
+		Endpoint:          endpoint,
 		SignURLExpire:     4,
 		ListObjectVersion: "v1",
 	}
 
-	return storage, addition
+	return storage, addition, nil
 }
 
-func buildWebDAVStorage() (model.Storage, driver.Additional) {
+func buildWebDAVStorage() (model.Storage, driver.Additional, error) {
+	url, err := requireEnv("WEBDAV_URL")
+	if err != nil {
+		return model.Storage{}, nil, err
+	}
+	username := getEnv("WEBDAV_USERNAME", "")
+	password := getEnv("WEBDAV_PASSWORD", "")
+	root := getEnv("WEBDAV_ROOT", "/")
+
 	storage := model.Storage{
 		MountPath:       "/",
 		Order:           1,
@@ -130,13 +174,13 @@ func buildWebDAVStorage() (model.Storage, driver.Additional) {
 
 	addition := &webdav.Addition{
 		Vendor:   "other",
-		Address:  getEnv("WEBDAV_URL", ""),
-		Username: getEnv("WEBDAV_USERNAME", ""),
-		Password: getEnv("WEBDAV_PASSWORD", ""),
+		Address:  url,
+		Username: username,
+		Password: password,
 		RootPath: driver.RootPath{
-			RootFolderPath: getEnv("WEBDAV_ROOT", "/"),
+			RootFolderPath: root,
 		},
 	}
 
-	return storage, addition
+	return storage, addition, nil
 }
