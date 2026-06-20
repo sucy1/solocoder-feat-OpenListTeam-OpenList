@@ -34,4 +34,9 @@ func init() {
 	RootCmd.PersistentFlags().BoolVar(&flags.Dev, "dev", false, "start with dev mode")
 	RootCmd.PersistentFlags().BoolVar(&flags.ForceBinDir, "force-bin-dir", false, "Force to use the directory where the binary file is located as data directory")
 	RootCmd.PersistentFlags().BoolVar(&flags.LogStd, "log-std", false, "Force to log to std")
+	RootCmd.PersistentFlags().StringVar(&flags.StorageType, "storage-type", "local", "storage type: local, s3, webdav")
+	RootCmd.PersistentFlags().BoolVar(&flags.Upload, "upload", false, "enable file upload")
+	RootCmd.PersistentFlags().StringVar(&flags.UploadDir, "upload-dir", "uploads", "upload directory (default: uploads)")
+	RootCmd.PersistentFlags().Int64Var(&flags.MaxUploadSize, "max-upload-size", 100*1024*1024, "max upload size in bytes (default: 100MB)")
+	RootCmd.PersistentFlags().StringVar(&flags.PasswdFile, "passwd-file", "", "path to htpasswd file for directory protection")
 }

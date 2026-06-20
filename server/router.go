@@ -13,6 +13,7 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/server/static"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 )
 
 func Init(e *gin.Engine) {
@@ -26,6 +27,11 @@ func Init(e *gin.Engine) {
 	g := e.Group(conf.URL.Path)
 	if conf.Conf.Scheme.HttpPort != -1 && conf.Conf.Scheme.HttpsPort != -1 && conf.Conf.Scheme.ForceHttps {
 		e.Use(middlewares.ForceHttps)
+	}
+	if flags.PasswdFile != "" {
+		if err := middlewares.LoadHtpasswd(flags.PasswdFile); err != nil {
+			log.Fatalf("failed to load htpasswd file: %v", err)
+		}
 	}
 	g.Any("/ping", func(c *gin.Context) {
 		c.String(200, "pong")
@@ -45,26 +51,33 @@ func Init(e *gin.Engine) {
 
 	downloadLimiter := middlewares.DownloadRateLimiter(stream.ClientDownloadLimit)
 	signCheck := middlewares.Down(sign.Verify)
-	g.GET("/d/*path", middlewares.PathParse, signCheck, downloadLimiter, handles.Down)
-	g.GET("/p/*path", middlewares.PathParse, signCheck, downloadLimiter, handles.Proxy)
-	g.HEAD("/d/*path", middlewares.PathParse, signCheck, handles.Down)
-	g.HEAD("/p/*path", middlewares.PathParse, signCheck, handles.Proxy)
-	archiveSignCheck := middlewares.Down(sign.VerifyArchive)
-	g.GET("/ad/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveDown)
-	g.GET("/ap/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveProxy)
-	g.GET("/ae/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveInternalExtract)
-	g.HEAD("/ad/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveDown)
-	g.HEAD("/ap/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveProxy)
-	g.HEAD("/ae/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveInternalExtract)
 
-	g.GET("/sd/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingDown)
-	g.GET("/sd/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingDown)
-	g.HEAD("/sd/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, handles.SharingDown)
-	g.HEAD("/sd/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, handles.SharingDown)
-	g.GET("/sad/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingArchiveExtract)
-	g.GET("/sad/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingArchiveExtract)
-	g.HEAD("/sad/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, handles.SharingArchiveExtract)
-	g.HEAD("/sad/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, handles.SharingArchiveExtract)
+	var fsHandlers []gin.HandlerFunc
+	if flags.PasswdFile != "" {
+		fsHandlers = append(fsHandlers, middlewares.HtpasswdAuth())
+	}
+
+	fsg := g.Group("", fsHandlers...)
+	fsg.GET("/d/*path", middlewares.PathParse, signCheck, downloadLimiter, handles.Down)
+	fsg.GET("/p/*path", middlewares.PathParse, signCheck, downloadLimiter, handles.Proxy)
+	fsg.HEAD("/d/*path", middlewares.PathParse, signCheck, handles.Down)
+	fsg.HEAD("/p/*path", middlewares.PathParse, signCheck, handles.Proxy)
+	archiveSignCheck := middlewares.Down(sign.VerifyArchive)
+	fsg.GET("/ad/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveDown)
+	fsg.GET("/ap/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveProxy)
+	fsg.GET("/ae/*path", middlewares.PathParse, archiveSignCheck, downloadLimiter, handles.ArchiveInternalExtract)
+	fsg.HEAD("/ad/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveDown)
+	fsg.HEAD("/ap/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveProxy)
+	fsg.HEAD("/ae/*path", middlewares.PathParse, archiveSignCheck, handles.ArchiveInternalExtract)
+
+	fsg.GET("/sd/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingDown)
+	fsg.GET("/sd/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingDown)
+	fsg.HEAD("/sd/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, handles.SharingDown)
+	fsg.HEAD("/sd/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, handles.SharingDown)
+	fsg.GET("/sad/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingArchiveExtract)
+	fsg.GET("/sad/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, downloadLimiter, handles.SharingArchiveExtract)
+	fsg.HEAD("/sad/:sid", middlewares.EmptyPathParse, middlewares.SharingIdParse, handles.SharingArchiveExtract)
+	fsg.HEAD("/sad/:sid/*path", middlewares.PathParse, middlewares.SharingIdParse, handles.SharingArchiveExtract)
 
 	api := g.Group("/api")
 	auth := api.Group("", middlewares.Auth(false))
@@ -102,8 +115,9 @@ func Init(e *gin.Engine) {
 	public.Any("/offline_download_tools", handles.OfflineDownloadTools)
 	public.Any("/archive_extensions", handles.ArchiveExtensions)
 
-	_fs(auth.Group("/fs"))
-	fsAndShare(api.Group("/fs", middlewares.Auth(true)))
+	fsapi := auth.Group("/fs", fsHandlers...)
+	_fs(fsapi)
+	fsAndShare(api.Group("/fs", append([]gin.HandlerFunc{middlewares.Auth(true)}, fsHandlers...)...))
 	_task(auth.Group("/task", middlewares.AuthNotGuest))
 	_sharing(auth.Group("/share", middlewares.AuthNotGuest))
 	admin(auth.Group("/admin", middlewares.AuthAdmin))
@@ -217,6 +231,7 @@ func _fs(g *gin.RouterGroup) {
 	// g.POST("/add_qbit", handles.AddQbittorrent)
 	// g.POST("/add_transmission", handles.SetTransmission)
 	g.POST("/add_offline_download", handles.AddOfflineDownload)
+	g.GET("/archive/download", handles.ArchiveDownload)
 	g.POST("/archive/decompress", handles.FsArchiveDecompress)
 	// Torrent 相关接口
 	g.POST("/torrent/parse", handles.ParseTorrent)
@@ -225,6 +240,7 @@ func _fs(g *gin.RouterGroup) {
 	g.POST("/torrent/generate", handles.GenerateTorrentForPath)
 	// Direct upload (client-side upload to storage)
 	g.POST("/get_direct_upload_info", middlewares.FsUp, handles.FsGetDirectUploadInfo)
+	g.POST("/upload", handles.SimpleUpload)
 }
 
 func _task(g *gin.RouterGroup) {

@@ -91,6 +91,7 @@ func Start() {
 	}
 	InitOfflineDownloadTools()
 	LoadStorages()
+	InitSimpleStorage()
 	InitTaskManager()
 	if !flags.Debug && !flags.Dev {
 		gin.SetMode(gin.ReleaseMode)

@@ -24,6 +24,7 @@ type ListReq struct {
 	Path     string `json:"path" form:"path"`
 	Password string `json:"password" form:"password"`
 	Refresh  bool   `json:"refresh"`
+	Q        string `json:"q" form:"q"`
 }
 
 type DirReq struct {
@@ -98,10 +99,19 @@ func FsList(c *gin.Context, req *ListReq, user *model.User) {
 		common.ErrorStrResp(c, "Refresh without permission", 403)
 		return
 	}
-	objs, err := fs.List(c.Request.Context(), reqPath, &fs.ListArgs{
-		Refresh:            req.Refresh,
-		WithStorageDetails: !user.IsGuest() && !setting.GetBool(conf.HideStorageDetails),
-	})
+	var objs []model.Obj
+	var err error
+	if req.Q != "" {
+		objs, err = fs.Search(c.Request.Context(), reqPath, req.Q, &fs.SearchArgs{
+			Refresh:            req.Refresh,
+			WithStorageDetails: !user.IsGuest() && !setting.GetBool(conf.HideStorageDetails),
+		})
+	} else {
+		objs, err = fs.List(c.Request.Context(), reqPath, &fs.ListArgs{
+			Refresh:            req.Refresh,
+			WithStorageDetails: !user.IsGuest() && !setting.GetBool(conf.HideStorageDetails),
+		})
+	}
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 		return
